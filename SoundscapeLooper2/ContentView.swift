@@ -8,6 +8,7 @@ struct ContentView: View {
                                                 VoiceConfig(index: 2)]
     @State private var envelope: [Float] = []
     @State private var showingImporter = false
+    @State private var clickingVoices: Set<UUID> = []
 
     var body: some View {
         VStack(spacing: 12) {
@@ -27,6 +28,8 @@ struct ContentView: View {
                     Button("Add Voice")    { addVoice() }.disabled(voices.count >= 10)
                     Button("Remove Last") { removeVoice() }.disabled(voices.isEmpty)
                     Spacer()
+                    Button("Analyze Clicks") { analyzeClicks() }
+                        .help("Submit click analysis to console")
                     Button("Stop") { engine.stopAll() }
                 }
             }
@@ -112,7 +115,11 @@ struct ContentView: View {
                         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .red, .yellow, .mint, .cyan, .indigo]
                         let color = colors[index % colors.count]
                         
-                        VoiceStrip(voice: $voices[index], bpm: engine.bpm, color: color) {
+                        VoiceStrip(voice: $voices[index], 
+                                  bpm: engine.bpm, 
+                                  color: color,
+                                  isClicking: clickingVoices.contains(voice.id),
+                                  onClickToggle: { toggleClickingVoice(voice.id) }) {
                             engine.liveAdjust(for: voice) // in case your row already calls back
                         }
                         // Ensure instant controls hit the node immediately
@@ -142,9 +149,17 @@ struct ContentView: View {
         }
     }
 
-    private func addVoice()   { voices.append(VoiceConfig(index: voices.count + 1)) }
+    private func addVoice() { 
+        voices.append(VoiceConfig(index: voices.count + 1))
+        // Trigger engine update for new voice
+        engine.markCycleParamsChanged(voices: voices)
+        engine.renderAndSchedule(voices: voices)
+    }
+    
     private func removeVoice() {
-        if let last = voices.popLast() { engine.removePlayer(for: last.id) }
+        if let last = voices.popLast() { 
+            engine.removePlayer(for: last.id) 
+        }
     }
     
     private func applySoloMute() {
@@ -157,6 +172,40 @@ struct ContentView: View {
             engine.liveAdjust(for: effective)
         }
     }
+    
+    private func toggleClickingVoice(_ id: UUID) {
+        if clickingVoices.contains(id) {
+            clickingVoices.remove(id)
+        } else {
+            clickingVoices.insert(id)
+        }
+    }
+    
+    private func analyzeClicks() {
+        print("\n========== CLICK ANALYSIS REPORT ==========")
+        print("Timestamp: \(Date())")
+        print("BPM: \(engine.bpm), Width: \(engine.widthScale), Anchor: \(engine.anchorSample)")
+        print("Sample rate: \(engine.sampleRate) Hz")
+        print("Channel count: \(engine.channelCount)")
+        print("File length: \(engine.fileLengthSamples) samples")
+        print("Total voices: \(voices.count)")
+        
+        for voice in voices {
+            let report = engine.analyzeClicksForVoice(voice.id, isClicking: clickingVoices.contains(voice.id))
+            print(report)
+            
+            // Print effective cycle info
+            if let region = engine.region(for: voice.id) {
+                let cycleSamples = voice.playback == .pingPong || voice.playback == .reverseThenForward
+                    ? region.lengthSamples * 2 : region.lengthSamples
+                let cycleMs = Int(Double(cycleSamples) / engine.sampleRate * 1000)
+                print("  Effective cycle: \(cycleMs)ms (\(cycleSamples) samples)")
+                print("  Playback mode effect: \(voice.playback == .pingPong || voice.playback == .reverseThenForward ? "DOUBLED" : "NORMAL")")
+            }
+        }
+        
+        print("========== END REPORT ==========\n")
+    }
 }
 
 // MARK: - Voice Strip (Vertical Mixer Channel)
@@ -165,10 +214,12 @@ fileprivate struct VoiceStrip: View {
     @Binding var voice: VoiceConfig
     var bpm: Double
     var color: Color
+    var isClicking: Bool = false
+    var onClickToggle: () -> Void = {}
     var onChanged: () -> Void
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .center, spacing: 6) {
             // Color indicator bar
             RoundedRectangle(cornerRadius: 4)
                 .fill(color)
@@ -179,80 +230,79 @@ fileprivate struct VoiceStrip: View {
                 .font(.caption)
                 .bold()
             
-            // Solo/Mute buttons
-            VStack(spacing: 4) {
-                Toggle("S", isOn: $voice.solo)
-                    .toggleStyle(MixerButtonStyle(color: .yellow))
-                    .help("Solo")
-                Toggle("M", isOn: $voice.mute)
-                    .toggleStyle(MixerButtonStyle(color: .red))
-                    .help("Mute")
+            // Row 1: S / M / C
+            HStack(spacing: 4) {
+                Toggle("S", isOn: $voice.solo).toggleStyle(MixerButtonStyle(color: .yellow)).help("Solo")
+                Toggle("M", isOn: $voice.mute).toggleStyle(MixerButtonStyle(color: .red)).help("Mute")
+                Button(action: onClickToggle) {
+                    Text("C").font(.caption).frame(width: 28, height: 28)
+                        .background(isClicking ? Color.orange : Color.gray.opacity(0.3))
+                        .foregroundColor(isClicking ? .white : .primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .buttonStyle(.plain).help("Mark as clicking")
             }
             
             Divider()
             
-            // Length controls
-            VStack(spacing: 4) {
-                Picker("", selection: $voice.subdivision.kind) {
-                    ForEach(SubdivisionKind.allCases) { k in
-                        Text(k.rawValue).tag(k)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 80)
-                .help("Length")
+            // Row 2: Multiplier indicator + up/down control
+            HStack(spacing: 4) {
+                Text("×\(voice.subdivision.count)")
+                    .font(.caption).monospacedDigit()
+                    .frame(minWidth: 24)
                 
-                Picker("", selection: $voice.subdivision.modifier) {
-                    Text("N").tag(SubdivisionModifier.normal)
-                    Text("·").tag(SubdivisionModifier.dotted)
-                    Text("3").tag(SubdivisionModifier.triplet)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 72)
-                .help("Modifier: Normal, Dotted, Triplet")
-                
-                Stepper("×\(voice.subdivision.count)", value: $voice.subdivision.count, in: 1...64)
+                Stepper("", value: $voice.subdivision.count, in: 1...64)
                     .labelsHidden()
-                    .frame(width: 80)
-                    .help("Number of units (e.g. 7 × 1/8)")
-                
-                // Show duration
-                let seconds = voice.subdivision.seconds(bpm: bpm)
-                Text(String(format: "%.0f ms", seconds * 1000))
-                    .font(.caption2)
-                    .monospacedDigit()
-                    .foregroundColor(.secondary)
+                    .scaleEffect(0.8)
             }
             
-            // Playback direction
-            Picker("", selection: $voice.playback) {
-                ForEach(PlaybackMode.allCases) { mode in
-                    Image(systemName: playbackIcon(for: mode))
-                        .help(mode.rawValue)
-                        .tag(mode)
-                }
+            // Row 3: Subdivision picker (note value)
+            Picker("", selection: $voice.subdivision.kind) {
+                ForEach(SubdivisionKind.allCases) { k in Text(k.rawValue).tag(k) }
             }
             .pickerStyle(.menu)
-            .frame(width: 60)
-            .help("Playback Direction")
+            .frame(width: 80)
             
-            Text("Mode")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+            // Row 4: Modifier picker
+            Picker("", selection: $voice.subdivision.modifier) {
+                Text("Normal").tag(SubdivisionModifier.normal)
+                Text("Dotted").tag(SubdivisionModifier.dotted)
+                Text("Triplet").tag(SubdivisionModifier.triplet)
+            }
+            .pickerStyle(.menu)
+            .frame(width: 80)
+            
+            // Loop mode (dropdown)
+            Picker("", selection: $voice.playback) {
+                Text("Forward").tag(PlaybackMode.forward)
+                Text("Reverse").tag(PlaybackMode.reverse)
+                Text("Ping-Pong").tag(PlaybackMode.pingPong)
+                Text("Rev→Fwd").tag(PlaybackMode.reverseThenForward)
+                Text("Random").tag(PlaybackMode.random)
+            }
+            .pickerStyle(.menu)
+            .frame(width: 100)
+            
+            // Duration readout
+            let seconds = voice.subdivision.seconds(bpm: bpm)
+            Text(String(format: "%.0f ms", seconds * 1000))
+                .font(.caption2).foregroundColor(.secondary)
             
             Divider()
             
             // Pan knob
-            PanKnob(value: $voice.pan)
-                .frame(width: 60, height: 60)
-            Text("Pan")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+            VStack(spacing: 2) {
+                PanKnob(value: $voice.pan)
+                    .frame(width: 50, height: 50)
+                Text("Pan")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
             
             // Volume fader
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 VerticalSlider(value: $voice.volume, range: 0...1)
-                    .frame(width: 40, height: 120)
+                    .frame(width: 40, height: 100)
                 Text(String(format: "%.2f", voice.volume))
                     .font(.caption2)
                     .monospacedDigit()
@@ -262,7 +312,7 @@ fileprivate struct VoiceStrip: View {
             }
         }
         .padding(8)
-        .frame(width: 100)
+        .frame(width: 110)
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }

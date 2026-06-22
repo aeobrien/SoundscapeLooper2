@@ -85,13 +85,19 @@ struct WaveformView: View {
                             .frame(width: effectiveWidth, height: geo.size.height)
                             .background(Color.black.opacity(0.03))
                             
-                            // Anchor marker
+                            // Anchor marker with spacer-based positioning for ScrollViewReader
                             let xAnchor = xForSample(anchorSample, width: effectiveWidth)
-                            Rectangle()
-                                .fill(Color.accentColor)
-                                .frame(width: 2, height: geo.size.height)
-                                .position(x: xAnchor, y: geo.size.height/2)
-                                .id("anchor") // For auto-scrolling
+                            HStack(spacing: 0) {
+                                Color.clear
+                                    .frame(width: max(0, xAnchor - 1))
+                                Rectangle()
+                                    .fill(Color.accentColor)
+                                    .frame(width: 2, height: geo.size.height)
+                                    .id("anchor") // For auto-scrolling
+                                Color.clear
+                                    .frame(width: max(0, effectiveWidth - xAnchor - 1))
+                            }
+                            .frame(width: effectiveWidth, height: geo.size.height)
                             
                             // Playhead lines
                             if let heads = playheads {
@@ -136,9 +142,8 @@ struct WaveformView: View {
                     }
                     .onChange(of: zoomLevel) { _ in
                         guard !isDragging else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            centerOnAnchor(proxy: scrollProxy, width: geo.size.width)
-                        }
+                        // Immediately recenter on the anchor when zoom changes
+                        centerOnAnchor(proxy: scrollProxy, width: geo.size.width)
                     }
                 }
             }
@@ -163,7 +168,11 @@ struct WaveformView: View {
     
     private func centerOnAnchor(proxy: ScrollViewProxy? = nil, width: CGFloat = 0) {
         if let proxy = proxy {
-            proxy.scrollTo("anchor", anchor: .center)
+            // Scroll to keep the anchor centered in the viewport
+            // The anchor marker already has .id("anchor")
+            withAnimation(.easeInOut(duration: 0.2)) {
+                proxy.scrollTo("anchor", anchor: .center)
+            }
         }
     }
 }
