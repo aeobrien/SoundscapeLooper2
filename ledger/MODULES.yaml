@@ -25,12 +25,12 @@ modules:
     project: SoundscapeLooper
     subsystem: Audio Engine
     name: Loop region planning
-    capability: Computes per-voice loop regions around an anchor point using tempo-derived durations and seam-aware snapping.
+    capability: Computes per-voice loop regions around an anchor point using tempo-derived durations, zero-crossing start snapping, and seam-scored end adjustment.
     status: partial
     approach: Derives region durations from musical subdivisions, alternates placement around a shared anchor, and adjusts boundaries with zero-crossing and correlation-based seam search.
     tech: [Swift, Foundation, AVFoundation]
     io: { in: "voice configs, BPM, width scale, crossfade setting, anchor sample, decoded file buffer", out: "per-voice LoopRegion records" }
-    code_refs: [SoundscapeLooper2/AudioEngine.swift, SoundscapeLooper2/Models.swift]
+    code_refs: ["SoundscapeLooper2/AudioEngine.swift#computeRegions(for:)", "SoundscapeLooper2/AudioEngine.swift#bestEndForSeam(start:length:search:)", "SoundscapeLooper2/AudioEngine.swift#nearestZeroCrossing(around:search:)", SoundscapeLooper2/Models.swift]
     known_gaps:
       - "Section selection is anchor-driven rather than direct manual start/end editing."
       - "Behavior is tuned heuristically and the project ledger still lists the audio engine as early."
