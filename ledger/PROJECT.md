@@ -51,3 +51,5 @@ SoundscapeLooper2/
 - Current state of audio engine implementation
 - Whether section selection UI is functional
 - Target platform (iOS, macOS, or both)
+
+**Lane:** personal
