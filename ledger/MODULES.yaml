@@ -1,0 +1,85 @@
+project_shape:
+  scale: small
+  has_subsystem_layer: true
+  expected_modules: "4-6"
+  kind: product
+
+modules:
+  - id: soundscapelooper.audio-engine.audio-file-ingest
+    project: SoundscapeLooper
+    subsystem: Audio Engine
+    name: Audio file ingest
+    capability: Loads a user-selected audio file into memory and exposes buffer metadata needed by the rest of the app.
+    status: working
+    approach: Uses `fileImporter` in SwiftUI and `AVAudioFile` plus `AVAudioPCMBuffer` in AVFoundation to read a single audio file into an in-memory buffer.
+    tech: [SwiftUI, AVFoundation, Foundation]
+    io: { in: "user-selected audio URL", out: "decoded PCM buffer, sample rate, channel count, file length, initial anchor sample" }
+    code_refs: [SoundscapeLooper2/ContentView.swift, SoundscapeLooper2/AudioEngine.swift]
+    known_gaps:
+      - "Only one source file is handled at a time."
+      - "Import errors are only printed to the console; there is no user-facing failure state."
+      - "The roadmap says the core end-to-end loop is not yet verified."
+    match_keywords: [audio import, file loading, pcm decode, wav, mp3, avaudiofile]
+
+  - id: soundscapelooper.audio-engine.loop-region-planning
+    project: SoundscapeLooper
+    subsystem: Audio Engine
+    name: Loop region planning
+    capability: Computes per-voice loop regions around an anchor point using tempo-derived durations and seam-aware snapping.
+    status: partial
+    approach: Derives region durations from musical subdivisions, alternates placement around a shared anchor, and adjusts boundaries with zero-crossing and correlation-based seam search.
+    tech: [Swift, Foundation, AVFoundation]
+    io: { in: "voice configs, BPM, width scale, crossfade setting, anchor sample, decoded file buffer", out: "per-voice LoopRegion records" }
+    code_refs: [SoundscapeLooper2/AudioEngine.swift, SoundscapeLooper2/Models.swift]
+    known_gaps:
+      - "Section selection is anchor-driven rather than direct manual start/end editing."
+      - "Behavior is tuned heuristically and the project ledger still lists the audio engine as early."
+      - "Crossfade influences planning, but the UI labels it as parity-only in this minimal version."
+    match_keywords: [loop segmentation, beat-synced regions, zero crossing detection, seam alignment, audio slicing]
+
+  - id: soundscapelooper.audio-engine.loop-render-and-scheduling
+    project: SoundscapeLooper
+    subsystem: Audio Engine
+    name: Loop render and scheduling
+    capability: Builds loop buffers for each playback mode, post-processes seams, and keeps voices looping in sync during playback.
+    status: partial
+    approach: Uses `AVAudioEngine` with one `AVAudioPlayerNode` per voice, renders forward or reversed buffers in memory, applies DC removal and seam crossfades, and reschedules buffers on completion callbacks.
+    tech: [AVFoundation, Swift, Foundation]
+    io: { in: "decoded audio buffer, loop regions, voice configs, live mute/pan/volume changes", out: "scheduled looping playback, live playhead positions, click-analysis reports" }
+    code_refs: [SoundscapeLooper2/AudioEngine.swift]
+    known_gaps:
+      - "`crossfadeMs` is marked as API-compatibility baggage and is not used as a full engine control in the minimal chain."
+      - "Random playback mode reuses forward playhead mapping because actual random positions are not tracked."
+      - "Debugging is console-driven; there is no automated verification or audible regression coverage."
+    match_keywords: [audio looping engine, avaudioengine, player node scheduling, ping-pong playback, click reduction]
+
+  - id: soundscapelooper.waveform-ui.waveform-inspection-and-anchoring
+    project: SoundscapeLooper
+    subsystem: Waveform UI
+    name: Waveform inspection and anchoring
+    capability: Renders a waveform overview with zoom, anchor dragging, voice-region overlays, and playhead visualization.
+    status: working
+    approach: Downsamples the decoded buffer into an envelope and draws it with SwiftUI `Canvas`, `ScrollView`, and gesture-driven anchor updates.
+    tech: [SwiftUI, AVFoundation, Accelerate]
+    io: { in: "PCM buffer, total sample count, anchor sample, loop regions, playhead samples", out: "interactive waveform view and updated anchor sample" }
+    code_refs: [SoundscapeLooper2/WaveformView.swift, SoundscapeLooper2/ContentView.swift]
+    known_gaps:
+      - "The UI exposes a single anchor marker, not direct per-region boundary editing."
+      - "Waveform rendering is overview-oriented and does not provide detailed sample-level trimming tools."
+    match_keywords: [waveform viewer, timeline scrubber, anchor marker, region overlay, audio visualization]
+
+  - id: soundscapelooper.waveform-ui.voice-mixer-and-transport
+    project: SoundscapeLooper
+    subsystem: Waveform UI
+    name: Voice mixer and transport
+    capability: Lets the user manage voices, musical timing, playback modes, and basic transport actions for the current soundscape.
+    status: partial
+    approach: Uses a single SwiftUI screen with per-voice strips, custom pan and volume controls, and direct bindings into the audio engine's live and cycle-boundary update APIs.
+    tech: [SwiftUI, Foundation]
+    io: { in: "user gestures for import, BPM, width, crossfade, solo, mute, pan, volume, subdivisions, playback mode, voice count", out: "updated voice configs, engine state changes, playback start or stop commands" }
+    code_refs: [SoundscapeLooper2/ContentView.swift, SoundscapeLooper2/Models.swift, SoundscapeLooper2/SoundscapeLooper2App.swift]
+    known_gaps:
+      - "There is no saved soundscape model, preset management, or project persistence."
+      - "The app currently exposes console-only click analysis instead of a user-facing diagnostics workflow."
+      - "The roadmap still treats the usable MVP loop workflow as unfinished."
+    match_keywords: [mixer ui, multi-voice looper, transport controls, loop voice editor, soundscape playback]
