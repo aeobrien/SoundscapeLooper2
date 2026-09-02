@@ -1,0 +1,23 @@
+{
+  "capture_finished_at_utc": "2026-09-02T00:21:23Z",
+  "capture_started_at_utc": "2026-09-02T00:21:21Z",
+  "captured_at_utc": "2026-09-02T00:21:21Z",
+  "captured_byte_estimate": 112048,
+  "captured_path_count": 23,
+  "consistency_retry_count": 0,
+  "excluded": [],
+  "github_hard_limit_bytes": 100000000,
+  "guardian_version": "2.0-sidecar",
+  "head_state": "symbolic",
+  "host": "aidans-mac-mini",
+  "racy_capture": false,
+  "repository_id": "SoundscapeLooper-2b4fdd6f8cd0",
+  "schema_version": 1,
+  "snapshot_blob_threshold_bytes": 94371840,
+  "snapshot_consistency": "stable",
+  "source_branch": "main",
+  "source_head_oid": "321349b7c3c30d818ad081d3e654f82263b4464c",
+  "source_index_sha256": "a283fe9e7a28731697411f3a14fd707b7fd0a1a6fe3421359124ad6f03ac7f62",
+  "source_path": "/Users/aidanobrien/Dev/SoundscapeLooper",
+  "upstream_observed": "origin/main"
+}
