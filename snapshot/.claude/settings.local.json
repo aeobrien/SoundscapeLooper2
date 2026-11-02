@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild:*)",
+      "Bash(open /Users/aidan/Library/Developer/Xcode/DerivedData/SoundscapeLooper2-dpxzwwzbzrrxrxhkiftctbbjzycm/Build/Products/Debug/SoundscapeLooper2.app)"
+    ],
+    "deny": []
+  }
+}
